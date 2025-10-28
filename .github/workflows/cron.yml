@@ -1,23 +1,25 @@
-name: Import & Score (Cron)
+name: Cron - Import & Score
+
 on:
   schedule:
-    - cron: "0 9 * * *"
+    - cron: "0 11 * * *"
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
-  run:
+  run-cron:
     runs-on: ubuntu-latest
     steps:
-      - name: Hit Import Schedule Endpoint
+      - name: Import schedule (daily)
+        if: ${{ github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch' }}
         run: |
-          curl -sS -X POST "$API_BASE/api/cron/import-schedule" -H "x-cron-secret: $CRON_SECRET" || true
-        env:
-          API_BASE: ${{ secrets.API_BASE }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-      - name: Hit Score Endpoint
+          curl -sS -X POST "$API_BASE/api/cron/import-schedule" \
+            -H "x-cron-secret: $CRON_SECRET"
+      - name: Score updates (every 30 mins)
+        if: ${{ github.event.schedule == '*/30 * * * *' || github.event_name == 'workflow_dispatch' }}
         run: |
-          curl -sS -X POST "$API_BASE/api/cron/score" -H "x-cron-secret: $CRON_SECRET" || true
-        env:
-          API_BASE: ${{ secrets.API_BASE }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          curl -sS -X POST "$API_BASE/api/cron/score?season=2025" \
+            -H "x-cron-secret: $CRON_SECRET"
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
