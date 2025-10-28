@@ -1,0 +1,23 @@
+name: Import & Score (Cron)
+on:
+  schedule:
+    - cron: "0 9 * * *"
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Import Schedule Endpoint
+        run: |
+          curl -sS -X POST "$API_BASE/api/cron/import-schedule" -H "x-cron-secret: $CRON_SECRET" || true
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      - name: Hit Score Endpoint
+        run: |
+          curl -sS -X POST "$API_BASE/api/cron/score" -H "x-cron-secret: $CRON_SECRET" || true
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
