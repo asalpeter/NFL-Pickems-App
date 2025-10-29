@@ -12,14 +12,13 @@ export default function AuthListener() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // Tell the server to sync cookies with the current session
+        // Sync client auth -> server cookies
         await fetch("/auth/callback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ event, session }),
         });
-
-        // Refresh RSC payload so server components (header) re-render with new auth
+        // Re-render server components (header) with fresh cookies
         router.refresh();
       }
     );
