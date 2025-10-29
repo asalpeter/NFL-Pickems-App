@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
@@ -13,22 +14,16 @@ export default function OnboardingPage() {
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/auth");
-        return;
-      }
+      if (!user) return router.replace("/auth");
       const { data: prof } = await supabase
         .from("profiles")
         .select("username")
         .eq("id", user.id)
         .maybeSingle();
-      if (prof?.username) {
-        router.replace("/"); // already set
-        return;
-      }
+      if (prof?.username) return router.replace("/");
       setLoading(false);
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
@@ -41,23 +36,17 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setErr("Please sign in again.");
 
-    // Try to update; rely on unique index to catch conflicts
     const { error } = await supabase
       .from("profiles")
       .update({ username: uname })
       .eq("id", user.id);
 
     if (error) {
-      // 23505 = unique_violation in Postgres
-      if ((error as any).code === "23505") {
-        setErr("That username is taken. Try another.");
-      } else {
-        setErr(error.message);
-      }
+      if ((error as any).code === "23505") setErr("That username is taken.");
+      else setErr(error.message);
       return;
     }
-
-    router.replace("/"); // success → send to home (or /leagues)
+    router.replace("/");
   }
 
   if (loading) {
