@@ -1,4 +1,4 @@
-name: Cron - Import & Score
+name: Cron - Import Schedule Daily & Score Games Hourly
 
 on:
   schedule:
