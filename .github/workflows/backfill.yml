@@ -1,0 +1,37 @@
+name: Backfill Schedule and Scores Manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season to backfill"
+        required: true
+        default: "2025"
+      allWeeks:
+        description: "Score all weeks?"
+        required: true
+        default: "true"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger schedule import
+        run: |
+          echo "Importing schedule..."
+          curl -s -X POST "${{ secrets.API_BASE }}/api/cron/import-schedule" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -o response_schedule.json -w "%{http_code}\n"
+
+          echo "Schedule import response:"
+          cat response_schedule.json
+
+      - name: Trigger score update
+        run: |
+          echo "Scoring all weeks..."
+          curl -s -X POST "${{ secrets.API_BASE }}/api/cron/score?season=${{ github.event.inputs.season }}&allWeeks=${{ github.event.inputs.allWeeks }}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -o response_score.json -w "%{http_code}\n"
+
+          echo "Score update response:"
+          cat response_score.json
