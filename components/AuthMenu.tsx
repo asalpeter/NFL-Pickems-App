@@ -5,6 +5,13 @@ export default async function AuthMenu() {
   const supabase = await getServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Server Action for signout
+  async function signOutAction() {
+    "use server";
+    const s = await getServerSupabase();
+    await s.auth.signOut();
+  }
+
   if (!user) return <Link className="link" href="/auth">Sign in</Link>;
 
   const { data: p } = await supabase
@@ -16,7 +23,7 @@ export default async function AuthMenu() {
   return (
     <div className="flex items-center gap-3">
       <Link className="link" href="/dashboard">{p?.username ?? "Profile"}</Link>
-      <form action={async () => { const s = await getServerSupabase(); await s.auth.signOut(); }}>
+      <form action={signOutAction}>
         <button type="submit" className="link">Sign out</button>
       </form>
     </div>
