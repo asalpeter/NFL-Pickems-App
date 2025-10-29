@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase-server";
 
-// Receives auth state changes from the client and syncs server cookies.
 export async function POST(req: Request) {
   const { event, session } = await req.json();
   const supabase = await getServerSupabase();
 
   try {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INIT") {
       if (session?.access_token && session?.refresh_token) {
         await supabase.auth.setSession({
           access_token: session.access_token,
