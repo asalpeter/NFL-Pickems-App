@@ -15,16 +15,20 @@ export default function OnboardingPage() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.replace("/auth");
+
+      // Prefill with current profile username (likely email prefix from trigger)
       const { data: prof } = await supabase
         .from("profiles")
-        .select("username")
+        .select("username, onboarded")
         .eq("id", user.id)
         .maybeSingle();
-      if (prof?.username) return router.replace("/");
+
+      if (prof?.onboarded) return router.replace("/");
+
+      setUsername(prof?.username ?? "");
       setLoading(false);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase, router]);
 
   async function save() {
     setErr(null);
@@ -38,7 +42,7 @@ export default function OnboardingPage() {
 
     const { error } = await supabase
       .from("profiles")
-      .update({ username: uname })
+      .update({ username: uname, onboarded: true })
       .eq("id", user.id);
 
     if (error) {
