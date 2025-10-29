@@ -12,14 +12,12 @@ function CallbackInner() {
   useEffect(() => {
     (async () => {
       try {
-        await new Promise((r) => setTimeout(r, 50));
-
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          setMsg("No active session. Try signing in again.");
+          setMsg("No active session. Please sign in.");
+          router.replace("/auth");
           return;
         }
-
         const { data: prof } = await supabase
           .from("profiles")
           .select("username")
