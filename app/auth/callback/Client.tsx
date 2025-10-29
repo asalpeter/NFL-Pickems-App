@@ -13,29 +13,32 @@ function CallbackInner() {
   useEffect(() => {
     (async () => {
       try {
-        const code = search.get("code");
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-        }
+        // handles magic links, oauth, recovery links, etc.
+        const { error: exchErr } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        if (exchErr) throw exchErr;
+
+        // confirm a valid user session
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          setMsg("No user session found. Try signing in again.");
+          setMsg("No active session. Try signing in again.");
           return;
         }
+
+        // check if they already have a username
         const { data: prof } = await supabase
           .from("profiles")
           .select("username")
           .eq("id", user.id)
           .maybeSingle();
 
+        // redirect appropriately
         router.replace(prof?.username ? "/" : "/onboarding");
       } catch (e: any) {
+        console.error(e);
         setMsg(e?.message ?? "Sign-in failed.");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase, router, search]);
 
   return (
     <div className="max-w-md mx-auto p-6 card">
