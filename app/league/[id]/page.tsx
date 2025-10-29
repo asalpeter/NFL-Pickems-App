@@ -9,7 +9,7 @@ import { teamLogoPath } from "@/lib/logos";
 
 type Member = {
   user_id: string;
-  profiles: { username: string | null; id: string } | null; // normalize to single object (or null)
+  profiles: { username: string | null; id: string } | null;
 };
 
 export default function LeaguePage() {
@@ -30,31 +30,48 @@ export default function LeaguePage() {
 
   useEffect(() => {
     (async () => {
-      const { data: l } = await supabase.from("leagues").select("*").eq("id", leagueId).maybeSingle();
+      const { data: l } = await supabase
+        .from("leagues")
+        .select("*")
+        .eq("id", leagueId)
+        .maybeSingle();
       setLeague(l ?? null);
 
       const { data: rawMembers, error: mErr } = await supabase
-        .from('league_members')
-        .select('user_id, profiles(username,id)')
-        .eq('league_id', leagueId);
+        .from("league_members")
+        .select("user_id, profiles(username,id)")
+        .eq("league_id", leagueId);
 
       if (mErr) {
-        // Avoid triggering Next.js red overlay; still log for debugging
-        console.warn('[league_members] fetch error:', mErr.message ?? mErr);
-        setMembers([]); // prevent mapping undefined
+        console.warn("[league_members] fetch error:", mErr.message ?? mErr);
+        setMembers([]);
       } else {
-        // normalize profiles: array → first object or null
         const normalized: Member[] = (rawMembers ?? []).map((row: any) => ({
           user_id: row.user_id,
-          profiles: Array.isArray(row.profiles) ? (row.profiles[0] ?? null) : (row.profiles ?? null),
+          profiles: Array.isArray(row.profiles)
+            ? row.profiles[0] ?? null
+            : row.profiles ?? null,
         }));
         setMembers(normalized);
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setUserId(user?.id || null);
     })();
-  }, [leagueId, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagueId]);
+
+  // 🔒 Map user_id -> username once, for stable rendering
+  const nameById = useMemo(() => {
+    const m: Record<string, string | undefined> = {};
+    for (const row of members) {
+      const u = row.profiles?.username ?? undefined;
+      if (u) m[row.user_id] = u;
+    }
+    return m;
+  }, [members]);
 
   async function loadGamesAndPicks() {
     const { data: g } = await supabase
@@ -65,17 +82,24 @@ export default function LeaguePage() {
       .order("kickoff", { ascending: true });
     setGames(g || []);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && (g || []).length) {
       const { data: my } = await supabase
         .from("picks")
         .select("*")
         .eq("league_id", leagueId)
         .eq("user_id", user.id)
-        .in("game_id", (g || []).map((x) => x.id));
+        .in(
+          "game_id",
+          (g || []).map((x) => x.id)
+        );
 
       const map: Record<string, "HOME" | "AWAY" | null> = {};
-      (g || []).forEach((x) => (map[x.id] = (my || []).find((p) => p.game_id === x.id)?.pick ?? null));
+      (g || []).forEach((x) => {
+        map[x.id] = (my || []).find((p) => p.game_id === x.id)?.pick ?? null;
+      });
       setPicks(map);
 
       // tiebreaker
@@ -87,21 +111,29 @@ export default function LeaguePage() {
         .eq("season", season)
         .eq("week", week)
         .maybeSingle();
-      if (tb?.total_points_guess != null) setTiebreakerGuess(String(tb.total_points_guess));
+      if (tb?.total_points_guess != null)
+        setTiebreakerGuess(String(tb.total_points_guess));
     }
 
     // weekly + season standings
-    const res = await fetch(`/api/weekly?league_id=${leagueId}&season=${season}&week=${week}`);
+    const res = await fetch(
+      `/api/weekly?league_id=${leagueId}&season=${season}&week=${week}`
+    );
     const w = await res.json();
     setWeekly(w.data || []);
 
-    const seasonRes = await fetch(`/api/standings?league_id=${leagueId}&season=${season}`);
+    const seasonRes = await fetch(
+      `/api/standings?league_id=${leagueId}&season=${season}`
+    );
     const s = await seasonRes.json();
     const mapSeason: Record<string, number> = {};
     (s.data || []).forEach((row: any) => {
       mapSeason[row.user_id] = (mapSeason[row.user_id] || 0) + (row.wins || 0);
     });
-    const arr = Object.entries(mapSeason).map(([user_id, wins]) => ({ user_id, wins }));
+    const arr = Object.entries(mapSeason).map(([user_id, wins]) => ({
+      user_id,
+      wins,
+    }));
     arr.sort((a, b) => b.wins - a.wins);
     setSeasonBoard(arr);
   }
@@ -118,18 +150,25 @@ export default function LeaguePage() {
       return;
     }
     setPicks((prev) => ({ ...prev, [game.id]: choice }));
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return alert("Sign in");
     const { error } = await supabase
       .from("picks")
-      .upsert({ league_id: leagueId, user_id: user.id, game_id: game.id, pick: choice }, { onConflict: "league_id,user_id,game_id" });
+      .upsert(
+        { league_id: leagueId, user_id: user.id, game_id: game.id, pick: choice },
+        { onConflict: "league_id,user_id,game_id" }
+      );
     if (error) alert(error.message);
   };
 
   const saveTiebreaker = async () => {
     const val = parseInt(tiebreakerGuess);
     if (Number.isNaN(val)) return alert("Enter a number for tiebreaker.");
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return alert("Sign in");
     const { error } = await supabase
       .from("weekly_tiebreakers")
@@ -138,33 +177,10 @@ export default function LeaguePage() {
     else alert("Saved tiebreaker guess.");
   };
 
-  const tiebreakerGame = useMemo(() => games.find(g => g.is_tiebreaker), [games]);
+  const tiebreakerGame = useMemo(() => games.find((g) => g.is_tiebreaker), [games]);
   const tiebreakerLocked = tiebreakerGame?.kickoff
     ? new Date(tiebreakerGame.kickoff).getTime() <= Date.now()
     : false;
-
-  <div className="mt-6 border-t border-slate-800 pt-4">
-    <h3 className="mb-2">Weekly tiebreaker</h3>
-    {tiebreakerGame ? (
-      <div className="flex items-center gap-3">
-        <span className="text-slate-300 text-sm">
-          Guess total points for the tiebreaker game ({tiebreakerGame.away} @ {tiebreakerGame.home}).
-        </span>
-        <input
-          className="input w-32"
-          placeholder="e.g., 45"
-          value={tiebreakerGuess}
-          onChange={(e) => setTiebreakerGuess(e.target.value)}
-          disabled={tiebreakerLocked}
-        />
-        <button className="btn" onClick={saveTiebreaker} disabled={tiebreakerLocked}>
-          {tiebreakerLocked ? "Locked" : "Save"}
-        </button>
-      </div>
-    ) : (
-      <p className="text-slate-400 text-sm">No tiebreaker game set for this week.</p>
-    )}
-  </div>
 
   return (
     <div className="grid gap-6">
@@ -179,11 +195,19 @@ export default function LeaguePage() {
         <div className="card md:grid-cols-2 md:col-span-2">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <label>Season</label>
-            <select className="select" value={season} onChange={(e) => setSeason(parseInt(e.target.value))}>
+            <select
+              className="select"
+              value={season}
+              onChange={(e) => setSeason(parseInt(e.target.value))}
+            >
               <option value={2025}>2025</option>
             </select>
             <label>Week</label>
-            <select className="select" value={week} onChange={(e) => setWeek(parseInt(e.target.value))}>
+            <select
+              className="select"
+              value={week}
+              onChange={(e) => setWeek(parseInt(e.target.value))}
+            >
               {Array.from({ length: 18 }).map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   {i + 1}
@@ -193,13 +217,20 @@ export default function LeaguePage() {
           </div>
 
           {games.length === 0 ? (
-            <p className="text-slate-400">No games for this week yet. Make sure you’ve run the schedule import cron.</p>
+            <p className="text-slate-400">
+              No games for this week yet. Make sure you’ve run the schedule import cron.
+            </p>
           ) : (
             <ul className="grid gap-3">
               {games.map((g) => {
-                const locked = g.kickoff ? new Date(g.kickoff).getTime() <= Date.now() : false;
+                const locked = g.kickoff
+                  ? new Date(g.kickoff).getTime() <= Date.now()
+                  : false;
                 return (
-                  <li key={g.id} className="border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <li
+                    key={g.id}
+                    className="border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3"
+                  >
                     <div className="flex items-center gap-3">
                       <Image src={teamLogoPath(g.away)} alt={g.away} width={56} height={32} />
                       <div className="text-slate-300 font-medium">
@@ -249,9 +280,10 @@ export default function LeaguePage() {
                   placeholder="e.g., 45"
                   value={tiebreakerGuess}
                   onChange={(e) => setTiebreakerGuess(e.target.value)}
+                  disabled={tiebreakerLocked}
                 />
-                <button className="btn" onClick={saveTiebreaker}>
-                  Save
+                <button className="btn" onClick={saveTiebreaker} disabled={tiebreakerLocked}>
+                  {tiebreakerLocked ? "Locked" : "Save"}
                 </button>
               </div>
             ) : (
@@ -272,7 +304,7 @@ export default function LeaguePage() {
                     (w.week_rank === 1 ? "bg-slate-800/40" : "")
                   }
                 >
-                  <span>{members.find((m) => m.user_id === w.user_id)?.profiles?.username ?? w.user_id.slice(0, 6)}</span>
+                  <span>{nameById[w.user_id] ?? w.user_id.slice(0, 6)}</span>
                   <span className="text-slate-300">
                     {w.wins} wins {w.tb_diff != null ? `(TB Δ ${w.tb_diff})` : ""}
                   </span>
@@ -292,7 +324,7 @@ export default function LeaguePage() {
                     (i === 0 ? "bg-slate-800/40" : "")
                   }
                 >
-                  <span>{members.find((m) => m.user_id === s.user_id)?.profiles?.username ?? s.user_id.slice(0, 6)}</span>
+                  <span>{nameById[s.user_id] ?? s.user_id.slice(0, 6)}</span>
                   <span className="text-slate-300">{s.wins} wins</span>
                 </li>
               ))}
