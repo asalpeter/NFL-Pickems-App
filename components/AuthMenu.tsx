@@ -1,15 +1,17 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getServerSupabase } from "@/lib/supabase-server";
 
 export default async function AuthMenu() {
   const supabase = await getServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Server Action for signout
+  // Server Action: sign out and redirect to home
   async function signOutAction() {
     "use server";
     const s = await getServerSupabase();
     await s.auth.signOut();
+    redirect("/"); // ⟵ redirect to home after sign-out
   }
 
   if (!user) return <Link className="link" href="/auth">Sign in</Link>;
