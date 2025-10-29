@@ -1,16 +1,46 @@
 "use client";
-import { getBrowserSupabase } from "@/lib/supabase-browser";
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import type { Game, League } from "@/types";
-import { format } from "date-fns";
 import Image from "next/image";
+import Link from "next/link";
+import { format } from "date-fns";
+
+import { getBrowserSupabase } from "@/lib/supabase-browser";
 import { teamLogoPath } from "@/lib/logos";
+import type { Game, League } from "@/types";
 
 type Member = {
   user_id: string;
-  profiles: { username: string | null; id: string } | null;
+  profiles: { id: string; username: string | null } | null;
 };
+
+type WeeklyRow = {
+  user_id: string;
+  wins: number;
+  week_rank: number | null;
+  tb_diff: number | null;
+  username?: string | null; // added by /api/weekly
+};
+
+type SeasonRow = {
+  user_id: string;
+  wins: number;
+  username?: string | null; // added by /api/standings
+};
+
+async function waitForSession(supabase: ReturnType<typeof getBrowserSupabase>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) return session;
+  return new Promise((resolve) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
+      if (sess) {
+        sub.subscription.unsubscribe();
+        resolve(sess);
+      }
+    });
+  });
+}
 
 export default function LeaguePage() {
   const supabase = getBrowserSupabase();
@@ -24,12 +54,15 @@ export default function LeaguePage() {
   const [season, setSeason] = useState<number>(2025);
   const [picks, setPicks] = useState<Record<string, "HOME" | "AWAY" | null>>({});
   const [tiebreakerGuess, setTiebreakerGuess] = useState<string>("");
-  const [weekly, setWeekly] = useState<any[]>([]);
-  const [seasonBoard, setSeasonBoard] = useState<any[]>([]);
+  const [weekly, setWeekly] = useState<WeeklyRow[]>([]);
+  const [seasonBoard, setSeasonBoard] = useState<SeasonRow[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
 
+  // Initial league + members + user
   useEffect(() => {
     (async () => {
+      await waitForSession(supabase);
+
       const { data: l } = await supabase
         .from("leagues")
         .select("*")
@@ -43,7 +76,7 @@ export default function LeaguePage() {
         .eq("league_id", leagueId);
 
       if (mErr) {
-        console.warn("[league_members] fetch error:", mErr.message ?? mErr);
+        console.warn("[league_members] select error:", mErr.message ?? mErr);
         setMembers([]);
       } else {
         const normalized: Member[] = (rawMembers ?? []).map((row: any) => ({
@@ -55,15 +88,13 @@ export default function LeaguePage() {
         setMembers(normalized);
       }
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id ?? null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId]);
 
-  // 🔒 Map user_id -> username once, for stable rendering
+  // Map user_id -> username for quick lookups and as a fallback
   const nameById = useMemo(() => {
     const m: Record<string, string | undefined> = {};
     for (const row of members) {
@@ -73,7 +104,9 @@ export default function LeaguePage() {
     return m;
   }, [members]);
 
+  // Load games, my picks, tiebreaker, and leaderboards
   async function loadGamesAndPicks() {
+    // Games for selected week/season
     const { data: g } = await supabase
       .from("games")
       .select("*")
@@ -82,19 +115,15 @@ export default function LeaguePage() {
       .order("kickoff", { ascending: true });
     setGames(g || []);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && (g || []).length) {
+    // My picks + tiebreaker
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && (g ?? []).length) {
       const { data: my } = await supabase
         .from("picks")
         .select("*")
         .eq("league_id", leagueId)
         .eq("user_id", user.id)
-        .in(
-          "game_id",
-          (g || []).map((x) => x.id)
-        );
+        .in("game_id", (g || []).map((x) => x.id));
 
       const map: Record<string, "HOME" | "AWAY" | null> = {};
       (g || []).forEach((x) => {
@@ -102,7 +131,6 @@ export default function LeaguePage() {
       });
       setPicks(map);
 
-      // tiebreaker
       const { data: tb } = await supabase
         .from("weekly_tiebreakers")
         .select("*")
@@ -111,31 +139,25 @@ export default function LeaguePage() {
         .eq("season", season)
         .eq("week", week)
         .maybeSingle();
-      if (tb?.total_points_guess != null)
+      if (tb?.total_points_guess != null) {
         setTiebreakerGuess(String(tb.total_points_guess));
+      } else {
+        setTiebreakerGuess("");
+      }
+    } else {
+      setPicks({});
+      setTiebreakerGuess("");
     }
 
-    // weekly + season standings
-    const res = await fetch(
-      `/api/weekly?league_id=${leagueId}&season=${season}&week=${week}`
-    );
+    // Weekly (enriched with username by API)
+    const res = await fetch(`/api/weekly?league_id=${leagueId}&season=${season}&week=${week}`, { cache: "no-store" });
     const w = await res.json();
-    setWeekly(w.data || []);
+    setWeekly((w?.data as WeeklyRow[]) ?? []);
 
-    const seasonRes = await fetch(
-      `/api/standings?league_id=${leagueId}&season=${season}`
-    );
+    // Season standings (enriched with username by API)
+    const seasonRes = await fetch(`/api/standings?league_id=${leagueId}&season=${season}`, { cache: "no-store" });
     const s = await seasonRes.json();
-    const mapSeason: Record<string, number> = {};
-    (s.data || []).forEach((row: any) => {
-      mapSeason[row.user_id] = (mapSeason[row.user_id] || 0) + (row.wins || 0);
-    });
-    const arr = Object.entries(mapSeason).map(([user_id, wins]) => ({
-      user_id,
-      wins,
-    }));
-    arr.sort((a, b) => b.wins - a.wins);
-    setSeasonBoard(arr);
+    setSeasonBoard((s?.data as SeasonRow[]) ?? []);
   }
 
   useEffect(() => {
@@ -143,6 +165,7 @@ export default function LeaguePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId, week, season]);
 
+  // Pick setter with kickoff lock
   const setPick = async (game: Game, choice: "HOME" | "AWAY") => {
     const cutoff = game.kickoff ? new Date(game.kickoff).getTime() : 0;
     if (cutoff && Date.now() >= cutoff) {
@@ -150,10 +173,10 @@ export default function LeaguePage() {
       return;
     }
     setPicks((prev) => ({ ...prev, [game.id]: choice }));
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return alert("Sign in");
+
     const { error } = await supabase
       .from("picks")
       .upsert(
@@ -163,12 +186,11 @@ export default function LeaguePage() {
     if (error) alert(error.message);
   };
 
+  // Tiebreaker save
   const saveTiebreaker = async () => {
     const val = parseInt(tiebreakerGuess);
     if (Number.isNaN(val)) return alert("Enter a number for tiebreaker.");
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return alert("Sign in");
     const { error } = await supabase
       .from("weekly_tiebreakers")
@@ -185,33 +207,29 @@ export default function LeaguePage() {
   return (
     <div className="grid gap-6">
       <div className="card">
-        <h1>{league?.name ?? "League"}</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Invite code: <span className="font-mono">{league?.code}</span>
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1>{league?.name ?? "League"}</h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Invite code: <span className="font-mono">{league?.code}</span>
+            </p>
+          </div>
+          <Link className="btn" href="/dashboard">← Back</Link>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
+        {/* Picks column */}
         <div className="card md:grid-cols-2 md:col-span-2">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <label>Season</label>
-            <select
-              className="select"
-              value={season}
-              onChange={(e) => setSeason(parseInt(e.target.value))}
-            >
+            <select className="select" value={season} onChange={(e) => setSeason(parseInt(e.target.value))}>
               <option value={2025}>2025</option>
             </select>
             <label>Week</label>
-            <select
-              className="select"
-              value={week}
-              onChange={(e) => setWeek(parseInt(e.target.value))}
-            >
+            <select className="select" value={week} onChange={(e) => setWeek(parseInt(e.target.value))}>
               {Array.from({ length: 18 }).map((_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {i + 1}
-                </option>
+                <option key={i + 1} value={i + 1}>{i + 1}</option>
               ))}
             </select>
           </div>
@@ -223,19 +241,12 @@ export default function LeaguePage() {
           ) : (
             <ul className="grid gap-3">
               {games.map((g) => {
-                const locked = g.kickoff
-                  ? new Date(g.kickoff).getTime() <= Date.now()
-                  : false;
+                const locked = g.kickoff ? new Date(g.kickoff).getTime() <= Date.now() : false;
                 return (
-                  <li
-                    key={g.id}
-                    className="border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3"
-                  >
+                  <li key={g.id} className="border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <Image src={teamLogoPath(g.away)} alt={g.away} width={56} height={32} />
-                      <div className="text-slate-300 font-medium">
-                        {g.away} @ {g.home}
-                      </div>
+                      <div className="text-slate-300 font-medium">{g.away} @ {g.home}</div>
                       <Image src={teamLogoPath(g.home)} alt={g.home} width={56} height={32} />
                       <div className="text-sm text-slate-400">
                         {g.kickoff ? format(new Date(g.kickoff), "eee, MMM d p") : null}
@@ -292,11 +303,12 @@ export default function LeaguePage() {
           </div>
         </div>
 
+        {/* Leaderboards column */}
         <div className="grid gap-6">
           <div className="card">
             <h3>Weekly leaderboard</h3>
             <ol className="mt-2 grid gap-2">
-              {weekly.map((w: any) => (
+              {weekly.map((w) => (
                 <li
                   key={w.user_id}
                   className={
@@ -304,7 +316,7 @@ export default function LeaguePage() {
                     (w.week_rank === 1 ? "bg-slate-800/40" : "")
                   }
                 >
-                  <span>{nameById[w.user_id] ?? w.user_id.slice(0, 6)}</span>
+                  <span>{w.username ?? nameById[w.user_id] ?? w.user_id.slice(0, 6)}</span>
                   <span className="text-slate-300">
                     {w.wins} wins {w.tb_diff != null ? `(TB Δ ${w.tb_diff})` : ""}
                   </span>
@@ -316,7 +328,7 @@ export default function LeaguePage() {
           <div className="card">
             <h3>Season leaderboard</h3>
             <ol className="mt-2 grid gap-2">
-              {seasonBoard.map((s: any, i: number) => (
+              {seasonBoard.map((s, i) => (
                 <li
                   key={s.user_id}
                   className={
@@ -324,7 +336,7 @@ export default function LeaguePage() {
                     (i === 0 ? "bg-slate-800/40" : "")
                   }
                 >
-                  <span>{nameById[s.user_id] ?? s.user_id.slice(0, 6)}</span>
+                  <span>{s.username ?? nameById[s.user_id] ?? s.user_id.slice(0, 6)}</span>
                   <span className="text-slate-300">{s.wins} wins</span>
                 </li>
               ))}
