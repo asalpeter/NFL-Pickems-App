@@ -1,6 +1,0 @@
-{
-  "crons": [
-    { "path": "/api/cron/import-schedule", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/score", "schedule": "*/15 * * * *" }
-  ]
-}
