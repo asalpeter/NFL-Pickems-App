@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {/* Keeps server cookies in sync with client auth, and triggers router.refresh() */}
+        {/* Keeps server cookies in sync with client auth and refreshes header */}
         <AuthListener />
 
         <header className="border-b border-slate-800">
