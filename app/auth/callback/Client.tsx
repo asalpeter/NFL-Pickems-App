@@ -18,13 +18,21 @@ function CallbackInner() {
           router.replace("/auth");
           return;
         }
-        const { data: prof } = await supabase
+
+        const { data: prof, error } = await supabase
           .from("profiles")
-          .select("username")
+          .select("username, onboarded")
           .eq("id", user.id)
           .maybeSingle();
 
-        router.replace(prof?.username ? "/" : "/onboarding");
+        if (error || !prof) {
+          // If the row isn't there yet (race with trigger), send to onboarding anyway.
+          router.replace("/onboarding");
+          return;
+        }
+
+        // Only skip onboarding when the explicit flag is set
+        router.replace(prof.onboarded ? "/" : "/onboarding");
       } catch (e: any) {
         console.error(e);
         setMsg(e?.message ?? "Sign-in failed.");
@@ -41,11 +49,13 @@ function CallbackInner() {
 
 export default function ClientCallback() {
   return (
-    <Suspense fallback={
-      <div className="max-w-md mx-auto p-6 card">
-        <p className="text-slate-300">Completing sign-in…</p>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="max-w-md mx-auto p-6 card">
+          <p className="text-slate-300">Completing sign-in…</p>
+        </div>
+      }
+    >
       <CallbackInner />
     </Suspense>
   );
