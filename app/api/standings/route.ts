@@ -1,13 +1,58 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase-server";
 
+// Aggregates season wins per user for a league + season, and joins profile usernames
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const league_id = searchParams.get('league_id');
-  const season = Number(searchParams.get('season') || '2025');
-  if (!league_id) return NextResponse.json({ error: "league_id required" }, { status: 400 });
+  const league_id = searchParams.get("league_id");
+  const season = Number(searchParams.get("season") || "2025");
+  if (!league_id) {
+    return NextResponse.json({ error: "league_id required" }, { status: 400 });
+  }
+
   const supabase = await getServerSupabase();
-  const { data, error } = await supabase.from('standings').select('*').eq('league_id', league_id).eq('season', season);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 1) Fetch picks for the league (all weeks in the season)
+  const { data: picks, error: pErr } = await supabase
+    .from("picks")
+    .select("user_id, game_id, pick")
+    .eq("league_id", league_id);
+  if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+
+  // 2) Fetch winners for games in the season
+  const { data: games, error: gErr } = await supabase
+    .from("games")
+    .select("id, winner")
+    .eq("season", season);
+  if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 });
+
+  const winByGame: Record<string, "HOME" | "AWAY" | null> = {};
+  (games ?? []).forEach((g: any) => { winByGame[g.id] = (g.winner as any) ?? null; });
+
+  // 3) Count wins per user
+  const winCount: Record<string, number> = {};
+  (picks ?? []).forEach((p: any) => {
+    const winner = winByGame[p.game_id];
+    if (winner && p.pick === winner) {
+      winCount[p.user_id] = (winCount[p.user_id] || 0) + 1;
+    }
+  });
+
+  // 4) Join usernames
+  const userIds = Object.keys(winCount);
+  let names: Record<string, string | null> = {};
+  if (userIds.length) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", userIds);
+    (profs ?? []).forEach((p: any) => { names[p.id] = p.username; });
+  }
+
+  // 5) Sorted response
+  const data = Object.entries(winCount)
+    .map(([user_id, wins]) => ({ user_id, wins, username: names[user_id] ?? null }))
+    .sort((a, b) => b.wins - a.wins);
+
   return NextResponse.json({ data });
 }
