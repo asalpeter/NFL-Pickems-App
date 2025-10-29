@@ -13,18 +13,16 @@ export default function AuthListener() {
     posting.current = true;
     try {
       const supabase = getBrowserSupabase();
-      // Always send current session so server cookies stay in sync
       const { data: { session } } = await supabase.auth.getSession();
 
       await fetch("/auth/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         body: JSON.stringify({ event: event ?? "INIT", session }),
-        keepalive: true, // survives page nav
+        keepalive: true,
       });
 
-      // Let cookies settle, then refresh RSC (header updates immediately)
-      // tiny delay helps if a navigation is in flight
+      // Refresh server components (e.g., header) after cookie sync
       setTimeout(() => router.refresh(), 0);
     } finally {
       posting.current = false;
@@ -34,15 +32,15 @@ export default function AuthListener() {
   useEffect(() => {
     const supabase = getBrowserSupabase();
 
-    // 1) Sync once on first mount (covers already-signed-in users)
+    // Initial sync on mount (covers already-signed-in users)
     sync("INIT");
 
-    // 2) Sync on every auth event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event) => {
-        await sync(event);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+      await sync(event);
+      if (event === "SIGNED_OUT") {
+        router.push("/"); // ⟵ navigate home on any sign-out event
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
