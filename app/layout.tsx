@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import AuthMenu from "@/components/AuthMenu";
 import AuthListener from "@/components/AuthListener";
+import { Toaster } from "@/components/useToast";
 
 export const metadata = {
   title: "NFL Pick'ems",
@@ -12,8 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {/* Keeps server cookies in sync with client auth and refreshes header */}
+        {/* Sync auth cookies + refresh header */}
         <AuthListener />
+        {/* App-wide toast UI */}
+        <Toaster />
 
         <header className="border-b border-slate-800">
           <div className="container py-4 flex items-center justify-between">
