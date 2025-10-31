@@ -24,7 +24,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex gap-4 text-sm items-center">
               <Link href="/dashboard" className="link">Dashboard</Link>
               <AuthMenu />
-              <a href="https://github.com/" target="_blank" className="link">GitHub</a>
             </nav>
           </div>
         </header>
