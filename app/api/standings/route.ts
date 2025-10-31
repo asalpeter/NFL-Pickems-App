@@ -1,41 +1,49 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase-server";
+import { z } from "zod";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const Q = z.object({
+  league_id: z.string().min(1),
+  season: z.coerce.number().int().min(1900).max(3000).default(2025),
+});
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const league_id = searchParams.get("league_id");
-  const season = Number(searchParams.get("season") || "2025");
-  if (!league_id) return NextResponse.json({ error: "league_id required" }, { status: 400 });
+  const url = new URL(req.url);
+  const parsed = Q.safeParse({
+    league_id: url.searchParams.get("league_id"),
+    season: url.searchParams.get("season"),
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
+  }
+  const { league_id, season } = parsed.data;
 
   const supabase = await getServerSupabase();
 
-  // Picks for league (all weeks in season)
   const { data: picks, error: pErr } = await supabase
     .from("picks")
     .select("user_id, game_id, pick")
     .eq("league_id", league_id);
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 
-  // Winners for games in season
   const { data: games, error: gErr } = await supabase
     .from("games")
-    .select("id, winner")
+    .select("id, winner, season")
     .eq("season", season);
   if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 });
 
   const winByGame: Record<string, "HOME" | "AWAY" | null> = {};
-  (games ?? []).forEach((g: any) => { winByGame[g.id] = (g.winner as any) ?? null; });
+  (games ?? []).forEach((g: any) => (winByGame[g.id] = (g.winner as any) ?? null));
 
-  // Aggregate wins per user
   const winCount: Record<string, number> = {};
   (picks ?? []).forEach((p: any) => {
-    const winner = winByGame[p.game_id];
-    if (winner && p.pick === winner) {
-      winCount[p.user_id] = (winCount[p.user_id] || 0) + 1;
-    }
+    const w = winByGame[p.game_id];
+    if (w && p.pick === w) winCount[p.user_id] = (winCount[p.user_id] || 0) + 1;
   });
 
-  // Join usernames
   const userIds = Object.keys(winCount);
   let names: Record<string, string | null> = {};
   if (userIds.length) {
@@ -43,7 +51,7 @@ export async function GET(req: Request) {
       .from("profiles")
       .select("id, username")
       .in("id", userIds);
-    (profs ?? []).forEach((p: any) => { names[p.id] = p.username; });
+    (profs ?? []).forEach((p: any) => (names[p.id] = p.username));
   }
 
   const data = Object.entries(winCount)
