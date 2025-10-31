@@ -77,7 +77,7 @@ export default function AuthPage() {
               onClick={() => { setMode("signup"); setMsg(null); }}
               type="button"
             >
-              Create
+              Create Account
             </button>
           </div>
         </div>
