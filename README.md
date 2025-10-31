@@ -87,6 +87,8 @@ Row Level Security (RLS) policies ensure users only access their own data.
 
 GitHub actions automatically import schedule and score picks based on game scores.
 
+---
+
 ## Deployment
 
  - Frontend: Deployed on vercel and automatically builds on `main`.
