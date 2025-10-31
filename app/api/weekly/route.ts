@@ -1,12 +1,27 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase-server";
+import { z } from "zod";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const Q = z.object({
+  league_id: z.string().min(1),
+  season: z.coerce.number().int().min(1900).max(3000).default(2025),
+  week: z.coerce.number().int().min(1).max(22).default(1),
+});
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const league_id = searchParams.get("league_id");
-  const season = Number(searchParams.get("season") || "2025");
-  const week = Number(searchParams.get("week") || "1");
-  if (!league_id) return NextResponse.json({ error: "league_id required" }, { status: 400 });
+  const url = new URL(req.url);
+  const parsed = Q.safeParse({
+    league_id: url.searchParams.get("league_id"),
+    season: url.searchParams.get("season"),
+    week: url.searchParams.get("week"),
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
+  }
+  const { league_id, season, week } = parsed.data;
 
   const supabase = await getServerSupabase();
 
@@ -27,7 +42,7 @@ export async function GET(req: Request) {
       .from("profiles")
       .select("id, username")
       .in("id", ids);
-    (profs ?? []).forEach((p: any) => { names[p.id] = p.username; });
+    (profs ?? []).forEach((p: any) => (names[p.id] = p.username));
   }
 
   const enriched = (data ?? []).map((r: any) => ({
