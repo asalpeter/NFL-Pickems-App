@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/**
- * Returns the most sensible "current" week number:
- * - the smallest week with kickoff > now, or
- * - if all are in the past, the largest week that exists
- */
 export async function computeDefaultWeek(
   supabase: SupabaseClient,
   season: number

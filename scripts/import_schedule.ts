@@ -1,8 +1,3 @@
-/**
- * Import schedule from a CSV with headers:
- * season,week,kickoff,home,away,is_tiebreaker
- * kickoff in ISO8601 UTC (e.g., 2025-09-07T20:25:00Z)
- */
 import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";

@@ -13,9 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {/* Sync auth cookies + refresh header */}
         <AuthListener />
-        {/* App-wide toast UI */}
         <Toaster />
 
         <header className="border-b border-slate-800">

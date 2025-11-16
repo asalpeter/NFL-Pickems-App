@@ -69,7 +69,6 @@ export default function AuthPage() {
   return (
     <div className="min-h-[70vh] grid place-items-center">
       <div className="card w-full max-w-md">
-        {/* just spacing change here */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h1 className="leading-tight">
             {mode === "signin" ? "Sign in" : "Create account"}
