@@ -26,12 +26,10 @@ function CallbackInner() {
           .maybeSingle();
 
         if (error || !prof) {
-          // If the row isn't there yet (race with trigger), send to onboarding anyway.
           router.replace("/onboarding");
           return;
         }
 
-        // Only skip onboarding when the explicit flag is set
         router.replace(prof.onboarded ? "/" : "/onboarding");
       } catch (e: any) {
         console.error(e);

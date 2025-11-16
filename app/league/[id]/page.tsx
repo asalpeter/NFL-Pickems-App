@@ -46,7 +46,6 @@ export default function LeaguePage() {
   const [seasonBoard, setSeasonBoard] = useState<SeasonRow[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Initial league + members + user + sensible default week
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -76,12 +75,10 @@ export default function LeaguePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!cancelled) setUserId(user?.id ?? null);
 
-      // pick a smart starting week once per mount
       const w = await computeDefaultWeek(supabase, season);
       if (!cancelled) setWeek(w);
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId, season]);
 
   const nameById = useMemo(() => {
@@ -144,7 +141,6 @@ export default function LeaguePage() {
       await loadGamesAndPicks();
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId, week, season]);
 
   const setPick = async (game: Game, choice: "HOME" | "AWAY") => {

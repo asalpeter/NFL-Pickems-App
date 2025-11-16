@@ -28,13 +28,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      // Ensure we actually have a session before querying
       await waitForSession(supabase);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Ensure profile exists, then re-fetch to pick up stored username
       const { data: prof } = await supabase
         .from("profiles")
         .select("*")
@@ -57,8 +55,6 @@ export default function Dashboard() {
         prof2 ?? { id: user.id, username: user.email?.split("@")[0] ?? null }
       );
 
-      // ---- Robust two-step fetch for leagues (avoids join alias/RLS quirks) ----
-      // 1) Get all league_ids the user belongs to
       const { data: memberships, error: mErr } = await supabase
         .from("league_members")
         .select("league_id")
@@ -79,7 +75,6 @@ export default function Dashboard() {
         return;
       }
 
-      // 2) Fetch leagues by those ids
       const { data: leaguesData, error: lErr } = await supabase
         .from("leagues")
         .select("*")
@@ -92,9 +87,7 @@ export default function Dashboard() {
       }
 
       setLeagues((leaguesData ?? []).filter(Boolean) as League[]);
-      // -------------------------------------------------------------------------
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createLeague = async () => {
@@ -112,13 +105,11 @@ export default function Dashboard() {
       .single();
     if (error) return alert(error.message);
 
-    // Add self as member
     const { error: jmErr } = await supabase
       .from("league_members")
       .insert({ league_id: data.id, user_id: user.id, is_admin: true });
     if (jmErr) return alert(jmErr.message);
 
-    // Reflect immediately in UI
     setLeagues((l) => [data as League, ...l]);
   };
 

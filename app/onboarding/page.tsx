@@ -16,7 +16,6 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.replace("/auth");
 
-      // Prefill with current profile username (likely email prefix from trigger)
       const { data: prof } = await supabase
         .from("profiles")
         .select("username, onboarded")

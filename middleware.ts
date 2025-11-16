@@ -8,7 +8,6 @@ export function middleware(req: NextRequest) {
   const isProtected = PROTECTED.some((r) => r.test(path));
   if (!isProtected) return;
 
-  // Supabase sets these cookies client-side — presence is a good lightweight guard.
   const hasAccess = req.cookies.has("sb-access-token");
   if (!hasAccess) {
     const url = req.nextUrl.clone();

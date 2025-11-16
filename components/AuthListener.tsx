@@ -10,7 +10,6 @@ export default function AuthListener() {
   const posting = useRef(false);
 
   async function sync(event: string) {
-    // prevent overlapping POSTs, but allow subsequent events
     if (posting.current) return;
     posting.current = true;
     try {
@@ -24,15 +23,12 @@ export default function AuthListener() {
         keepalive: true,
       });
 
-      // Always refresh RSC so server components (header) reflect new session immediately
       router.refresh();
 
-      // Optional UX: if user is on /auth and just signed in, send them to dashboard
       if (event === "SIGNED_IN" && pathname?.startsWith("/auth")) {
         router.replace("/dashboard");
       }
 
-      // Redirect home on sign-out
       if (event === "SIGNED_OUT") {
         router.push("/");
       }
@@ -44,16 +40,13 @@ export default function AuthListener() {
   useEffect(() => {
     const supabase = getBrowserSupabase();
 
-    // 1) Initial sync covers already-signed-in sessions and updates header on hard load
     void sync("INIT");
 
-    // 2) React to every auth state change (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event) => { await sync(event); }
     );
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;

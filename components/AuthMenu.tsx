@@ -6,12 +6,11 @@ export default async function AuthMenu() {
   const supabase = await getServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Server Action: sign out and redirect to home
   async function signOutAction() {
     "use server";
     const s = await getServerSupabase();
     await s.auth.signOut();
-    redirect("/"); // redirect immediately on the server
+    redirect("/");
   }
 
   if (!user) return <Link className="link" href="/auth">Sign in</Link>;
