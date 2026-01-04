@@ -73,8 +73,40 @@ The application had critical security vulnerabilities in Next.js and other depen
 
 ### Fix Applied
 Updated all dependencies to their latest secure versions:
-- Next.js: `15.0.7` → `15.5.9`
+- Next.js: `15.0.7` → `16.1.1`
 - Fixed all glob and js-yaml vulnerabilities
+
+---
+
+## 6. ✅ Middleware Blocking Dashboard Access (FIXED)
+
+### Issue
+Even when logged in, users couldn't access the dashboard - they were always redirected to `/auth`.
+
+The middleware was checking for a hardcoded cookie name `sb-access-token` that doesn't exist with Supabase SSR.
+
+### Fix Applied
+Updated `middleware.ts` to properly verify authentication using Supabase's `getUser()` method with the actual session cookies managed by Supabase SSR.
+
+**File Modified**: `middleware.ts`
+
+---
+
+## 7. ✅ League Join Code Not Working (FIXED)
+
+### Issue
+Users couldn't join leagues using the join code because the Row Level Security (RLS) policy on the `leagues` table prevented them from viewing leagues they weren't already members of - creating a catch-22.
+
+### Fix Applied
+Updated the RLS policy to allow anyone to SELECT leagues (needed to find a league by its join code). This is safe because:
+- The join code itself acts as the "password" to access the league
+- League member details and picks are still protected by their own RLS policies
+- Users can only INSERT themselves as members, not others
+
+**Files Modified**:
+- `supabase/supabase.sql`
+- `supabase/rls_policies_nonrecursive.sql`
+- `supabase/fix_league_join_policy.sql` (new migration)
 
 ---
 
@@ -90,6 +122,9 @@ Execute these SQL scripts in your Supabase SQL Editor (in order):
 
 -- 2. Set up automatic profile creation
 -- Run: supabase/trigger_create_profile.sql
+
+-- 3. Fix league join code functionality
+-- Run: supabase/fix_league_join_policy.sql
 ```
 
 ### 2. Configure Email Delivery
@@ -124,13 +159,16 @@ npm run dev
 
 ### Modified:
 - `lib/supabase-server.ts` - Fixed cookie modification error
-- `supabase/supabase.sql` - Added onboarded column to schema
+- `middleware.ts` - Fixed authentication check for dashboard access
+- `supabase/supabase.sql` - Added onboarded column and fixed league SELECT policy
+- `supabase/rls_policies_nonrecursive.sql` - Fixed league SELECT policy to allow join-by-code
 - `README.md` - Added comprehensive setup and email configuration instructions
 - `package.json` - Updated Next.js and dependencies to fix security vulnerabilities
 
 ### Created:
 - `supabase/migration_add_onboarded.sql` - Migration to add onboarded column
 - `supabase/trigger_create_profile.sql` - Trigger for automatic profile creation
+- `supabase/fix_league_join_policy.sql` - Fix league join code RLS policy
 - `FIXES_APPLIED.md` - This document
 
 ---

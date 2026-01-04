@@ -125,8 +125,9 @@ alter table picks enable row level security;
 alter table weekly_tiebreakers enable row level security;
 
 -- Policies
--- Public read for leagues/games/weeks (read-only schedule)
-create policy "read_all_leagues" on leagues for select using (true);
+-- Public read for leagues/games/weeks
+-- Leagues are readable by anyone so users can find and join leagues by code
+create policy "leagues_select_all" on leagues for select using (true);
 create policy "read_all_games" on games for select using (true);
 create policy "read_all_weeks" on weeks for select using (true);
 

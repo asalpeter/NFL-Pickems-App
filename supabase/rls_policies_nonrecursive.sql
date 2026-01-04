@@ -125,16 +125,13 @@ create policy tb_delete_self
   on weekly_tiebreakers for delete
   using (user_id = auth.uid());
 
--- ===== 4) leagues: members-only visibility (safe, non-recursive) =====
+-- ===== 4) leagues: public visibility so users can join by code =====
+-- Allow anyone to SELECT leagues (needed for join-by-code functionality)
+-- League member data and picks are still protected by their own RLS policies
 drop policy if exists leagues_select_members on leagues;
+drop policy if exists read_all_leagues on leagues;
+drop policy if exists leagues_select_all on leagues;
 
-create policy leagues_select_members
+create policy leagues_select_all
   on leagues for select
-  using (
-    exists (
-      select 1
-      from league_members lm
-      where lm.league_id = leagues.id
-        and lm.user_id = auth.uid()
-    )
-  );
+  using (true);
