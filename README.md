@@ -35,18 +35,41 @@ Scores and schedules update automatically through cron jobs and Supabase APIs.
 
 ## Setup
 
-### 1. Environment Variables
+### 1. Supabase Project Setup
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Run the database schema and migrations:
+   - Execute `supabase/supabase.sql` in the Supabase SQL Editor
+   - Execute `supabase/rls_policies_nonrecursive.sql` for Row Level Security
+   - Execute `supabase/migration_add_onboarded.sql` to add the onboarded column
+   - Execute `supabase/trigger_create_profile.sql` to auto-create profiles
+
+3. Configure email authentication in Supabase:
+   - Go to Authentication > Settings in your Supabase dashboard
+   - Enable Email provider
+   - Configure SMTP settings for email delivery:
+     - **Option 1 (Development)**: Use Supabase's built-in email service (limited)
+     - **Option 2 (Production)**: Configure custom SMTP:
+       - Go to Project Settings > Auth > SMTP Settings
+       - Add your SMTP server details (e.g., SendGrid, Mailgun, AWS SES)
+       - Test email delivery
+   - Customize email templates in Authentication > Email Templates
+   - For local development, you can view emails in the Supabase dashboard under Authentication > Logs
+
+### 2. Environment Variables
 Create a `.env.local` file:
 ```
 NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 CRON_SECRET=<secure-random-string>
+APP_URL=http://localhost:3000
+SCHEDULE_FEED_URL=https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv
+SCHEDULE_SEASON=2025
+SCORE_FEED_URL=https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv
 ```
 
----
-
-### 2. Installation
+### 3. Installation
 
 ```bash
 npm install
@@ -59,10 +82,10 @@ Visit `http://localhost:3000`.
 ## Database Schema
 
 Core tables:
- - `profiles` (id, username)
- - `leagues` (id, name, code, created_at)
- - `league_members` (league_id, user_id)
- - `games` (id, season, week, home, away, kickoff, winner)
+ - `profiles` (id, username, onboarded, created_at)
+ - `leagues` (id, name, code, owner_id, created_at)
+ - `league_members` (league_id, user_id, joined_at, is_admin)
+ - `games` (id, season, week, home, away, kickoff, winner, is_tiebreaker)
  - `picks` (league_id, user_id, game_id, pick)
  - `weekly_tiebreakers` (league_id, user_id, season, week, total_points_guess)
 
